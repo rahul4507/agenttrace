@@ -49,7 +49,7 @@ make diff         # v2 -> v3 per cluster, with significance tests
 make gap          # generate scenarios for the top uncovered clusters
 make gate         # exits 1 on a coverage or compliance regression
 make kyc          # the same pipeline on a second vertical
-make serve        # dashboard on http://127.0.0.1:8124
+make serve        # dashboard on http://127.0.0.1:8994
 
 cp .env.example .env   # add SARVAM_API_KEY for the two commands that need it
 make report-llm   # label with Sarvam-105B (~Rs 0.08/conversation, cached afterwards)
@@ -67,7 +67,7 @@ make agreement    # inter-labeler agreement
 | `make gate` | `python -m agenttrace.cli gate --offline` |
 | `make agreement` | `python -m agenttrace.cli agreement` |
 | `make kyc` | `python -m agenttrace.cli report --domain kyc --offline` |
-| `make serve` | `python -m uvicorn agenttrace.api:app --port 8124` |
+| `make serve` | `python -m uvicorn agenttrace.api:app --port 8994` |
 
 Everything except `report-llm` and `agreement` runs with no network and no API key. CI uses
 only the offline path.
@@ -78,7 +78,7 @@ The most reliable path on any host, and the only one verified end to end on a ma
 no local Python:
 
 ```bash
-docker compose up            # dashboard on http://localhost:8124
+docker compose up            # dashboard on http://localhost:8994
 # or
 make docker-test             # run the 81 tests in the container
 make docker-up               # dashboard
@@ -108,7 +108,7 @@ nix-shell -p 'python312.withPackages(ps: with ps; [
 
 python -m pytest
 python -m agenttrace.cli report --offline
-python -m uvicorn agenttrace.api:app --port 8124
+python -m uvicorn agenttrace.api:app --port 8994
 ```
 
 `nix run` starts the dashboard without entering a shell.

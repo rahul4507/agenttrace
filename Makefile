@@ -2,7 +2,7 @@
 # interpreter you want to use, override it:  make report PY=/path/to/python
 VENV ?= .venv
 PY   ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
-PORT ?= 8124
+PORT ?= 8994
 
 .PHONY: help venv corpus kyc report report-llm diff gap gate agreement serve test lint clean \
         docker docker-up docker-test docker-sh
@@ -83,7 +83,7 @@ docker:
 	docker build -t $(IMAGE) .
 
 docker-up: docker
-	docker run --rm -p $(PORT):8124 $(IMAGE)
+	docker run --rm -p $(PORT):8994 $(IMAGE)
 
 docker-test: docker
 	docker run --rm $(IMAGE) python -m pytest
