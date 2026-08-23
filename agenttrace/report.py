@@ -45,6 +45,12 @@ class RunArtifacts:
     settings: Settings
     domain: str = "collections"
 
+    def labeler_by_conversation(self) -> dict[str, str]:
+        """Which labeler produced each label. Surfaced per call, because a report built
+        partly on the degraded labeler has to say so at the point of use, not only in a
+        summary line."""
+        return {r.conversation_id: r.labeler for r in self.labels.results if r.ok}
+
     def suite_pass_rate(self) -> float:
         """Pass rate over graded conversations only.
 

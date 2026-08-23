@@ -146,6 +146,76 @@ def cmd_report(args) -> int:
     return 0
 
 
+def cmd_inspect(args) -> int:
+    """Everything known about one conversation: transcript, label, grade, cluster, cost."""
+    from .costs import component_cost
+
+    settings = load_settings(offline=args.offline or None)
+    art = run_report(transcripts=args.transcripts, suite_dir=args.suite,
+                     settings=settings, use_llm=args.llm, domain=args.domain)
+
+    conv = next((c for c in art.conversations if c.id == args.call_id), None)
+    if conv is None:
+        console.print(f"[red]no conversation {args.call_id!r} in {args.transcripts}[/red]")
+        return 2
+
+    label = art.labels.labels.get(conv.id)
+    grade = art.grades.get(conv.id)
+    row = next((r for r in art.coverage.rows if conv.id in r.cluster.conversation_ids), None)
+
+    console.print()
+    console.rule(f"[bold]{conv.id}[/bold]")
+    console.print(f"\n  {conv.agent_version} · {conv.language} · {round(conv.duration_s)}s · "
+                  f"{conv.turn_count} turns · platform said "
+                  f"[bold]{conv.disposition or '-'}[/bold]")
+    console.print("  tools: " + (", ".join(
+        f"{tc.name}{'' if tc.ok else ' (failed)'}" for tc in conv.tool_calls) or "none"))
+
+    console.print("\n[bold]transcript[/bold] [dim](PII redacted)[/dim]")
+    for line in conv.transcript().split("\n"):
+        who, _, text = line.partition(":")
+        colour = "cyan" if who.strip() == "CALLER" else "white"
+        console.print(f"  [{colour}]{who:<6}[/{colour}] {text.strip()}")
+
+    console.print(f"\n[bold]what the labeler concluded[/bold] "
+                  f"[dim]({art.labeler_by_conversation().get(conv.id, 'n/a')})[/dim]")
+    if label is None:
+        console.print("  [dim]no label[/dim]")
+    else:
+        console.print(f"  situation      {label.situation}"
+                      + ("  [yellow](invented -- not declared in the suite)[/yellow]"
+                         if label.is_new_situation else ""))
+        console.print("  agent failed   "
+                      + ("[red]yes[/red]" if label.agent_failed else "[green]no[/green]"))
+        if label.failure_mode:
+            console.print(f"  why            {label.failure_mode}")
+        if label.conditions:
+            console.print(f"  conditions     {', '.join(label.conditions)}")
+        if label.compliance_flags:
+            console.print(f"  compliance     [red]{', '.join(label.compliance_flags)}[/red]")
+        console.print(f"  confidence     {label.confidence}")
+
+    console.print("\n[bold]what the declared suite asserts[/bold]")
+    if grade is None:
+        console.print("  [yellow]not graded[/yellow] -- no declared scenario covers this "
+                      "situation, so there\n  are no expectations to run. The finding is "
+                      "the missing scenario.")
+    else:
+        console.print(f"  scenario {grade.scenario_id}: "
+                      + ("[green]PASS[/green]" if grade.passed else "[red]FAIL[/red]"))
+        for c in grade.checks:
+            mark = "[green]ok  [/green]" if c.passed else "[red]FAIL[/red]"
+            console.print(f"    {mark} {c.type:<28} {c.detail}")
+
+    if row is not None:
+        console.print(f"\n[bold]cluster[/bold]  {row.cluster.key}  [{row.status}]  "
+                      f"{row.cluster.volume} calls, {100*row.cluster.fail_rate:.0f}% failing")
+    console.print(f"\n[dim]cost of this call: "
+                  f"{_fmt_inr(component_cost(conv.estimated_usage()).total)} "
+                  f"(estimated from the transcript)[/dim]\n")
+    return 0
+
+
 def cmd_agreement(args) -> int:
     """Measure how far the report depends on the model.
 
@@ -394,6 +464,11 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--cost-mode", choices=["component", "platform"], default="component")
     r.add_argument("--min-cluster-size", type=int, default=3)
     r.set_defaults(fn=cmd_report)
+
+    ins = sub.add_parser("inspect", help="everything known about one conversation")
+    common(ins)
+    ins.add_argument("call_id")
+    ins.set_defaults(fn=cmd_inspect)
 
     ag = sub.add_parser("agreement",
                         help="measure how far the report depends on the model")

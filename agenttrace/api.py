@@ -61,13 +61,23 @@ def load(*, transcripts: Path | None = None, suite: Path | None = None,
 
 @app.on_event("startup")
 def _startup() -> None:
-    if _state.get("artifacts") is None:
+    """Load a report at startup, preferring the model labels.
+
+    Recorded responses ship in fixtures/, so the LLM path is normally free and instant and
+    is what a reader wants to see. Where neither a fixture entry nor a key is available it
+    falls back to the keyword labeler, and the page reports which one produced the labels.
+    """
+    if _state.get("artifacts") is not None:
+        return
+    for use_llm in (True, False):
         try:
-            load()
-        except AgentTraceError as exc:
-            # A failed load must not kill the server; the UI renders the error and can
-            # offer a refresh.
-            log.error("startup report failed: %s", exc)
+            load(use_llm=use_llm)
+            if not use_llm:
+                log.warning("model labels unavailable; loaded with the keyword labeler")
+            return
+        except Exception as exc:
+            log.warning("startup load (use_llm=%s) failed: %s", use_llm, exc)
+    log.error("startup produced no report; POST /api/refresh once configured")
 
 
 @app.get("/")
@@ -106,6 +116,9 @@ def api_cluster(key: str, limit: int = 4) -> dict:
     failing = [i for i in ids if (g := art.grades.get(i)) and not g.passed]
     ordered = (failing + [i for i in ids if i not in set(failing)])[:limit]
 
+    labels = art.labels.labels
+    labeler_of = art.labeler_by_conversation()
+
     return {
         **row.to_dict(),
         "examples": [
@@ -120,6 +133,19 @@ def api_cluster(key: str, limit: int = 4) -> dict:
                 # Redacted: this page is shared, screenshotted and pasted into tickets.
                 "transcript": by_id[cid].transcript(redacted=True),
                 "tools": [{"name": tc.name, "ok": tc.ok} for tc in by_id[cid].tool_calls],
+                # What the labeler concluded about THIS call. Every aggregate on the page is
+                # built from these, so they have to be inspectable per call.
+                "label": (
+                    {"labeler": labeler_of.get(cid, "unknown"),
+                     "situation": lb.situation,
+                     "situation_label": lb.situation_label,
+                     "is_new_situation": lb.is_new_situation,
+                     "conditions": lb.conditions,
+                     "agent_failed": lb.agent_failed,
+                     "failure_mode": lb.failure_mode,
+                     "compliance_flags": lb.compliance_flags,
+                     "confidence": lb.confidence}
+                    if (lb := labels.get(cid)) else None),
                 "grade": (
                     {"passed": g.passed,
                      "critical": g.has_critical_failure,

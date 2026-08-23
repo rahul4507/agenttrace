@@ -206,6 +206,30 @@ tbody tr:hover { background: var(--surface-1); }
           margin-bottom: 8px; }
 .fail { font-size: 11.5px; color: var(--critical); font-family: var(--mono);
         margin-top: 7px; padding-left: 9px; border-left: 2px solid var(--critical); }
+
+/* Two verdicts on the same call, side by side: what the labeler concluded, and what the
+   declared assertions found. They can disagree, and that disagreement is informative. */
+.verdicts { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 10px;
+            background: var(--border); border: 1px solid var(--border); }
+@media (max-width: 620px) { .verdicts { grid-template-columns: 1fr; } }
+.vd { background: var(--surface-1); padding: 9px 11px; }
+.vd .vh { font-family: var(--mono); font-size: 9.5px; font-weight: 650;
+          letter-spacing: .07em; text-transform: uppercase; color: var(--text-3);
+          margin-bottom: 7px; display: flex; justify-content: space-between; gap: 8px; }
+.vd .vh em { font-style: normal; color: var(--text-2); font-weight: 500;
+             text-transform: none; letter-spacing: 0; }
+.vd dl { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.5; }
+.vd dt { color: var(--text-3); margin-top: 5px; }
+.vd dd { margin: 0; color: var(--text-1); overflow-wrap: anywhere; }
+.vd dd.bad { color: var(--critical); }
+.vd dd.good { color: var(--good); }
+.vd .prose { font-family: var(--sans); font-size: 11.5px; line-height: 1.45;
+             color: var(--text-2); margin-top: 4px; }
+.vd .none { font-family: var(--sans); font-size: 11.5px; color: var(--text-3);
+            line-height: 1.45; }
+.tag-new { display: inline-block; font-family: var(--mono); font-size: 9px; font-weight: 650;
+           letter-spacing: .06em; padding: 1px 5px; border-radius: 3px; margin-left: 5px;
+           color: var(--series-2); border: 1px solid var(--series-2); }
 pre.yaml { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
            padding: 12px; font-family: var(--mono); font-size: 11px; overflow-x: auto;
            line-height: 1.5; margin: 10px 0 0; }
@@ -578,8 +602,40 @@ async function openCluster(key) {
           const i = l.indexOf(':');
           return `<div class="turn ${who}"><span class="who">${esc(l.slice(0, i))}</span>${esc(l.slice(i + 1))}</div>`;
         }).join('')}
-        ${x.grade && x.grade.failures.length ? x.grade.failures.map(f =>
-          `<div class="fail">${esc(f.type)}${f.severity === 'critical' ? ' [CRITICAL]' : ''}: ${esc(f.detail)}</div>`).join('') : ''}
+        <div class="verdicts">
+          <div class="vd">
+            <div class="vh"><span>labeler said</span>
+              <em>${x.label ? esc(x.label.labeler) : '—'}</em></div>
+            ${x.label ? `
+              <dl>
+                <dt>situation</dt>
+                <dd>${esc(x.label.situation)}${x.label.is_new_situation
+                  ? '<span class="tag-new">invented</span>' : ''}</dd>
+                <dt>agent failed</dt>
+                <dd class="${x.label.agent_failed ? 'bad' : 'good'}">${x.label.agent_failed ? 'yes' : 'no'}</dd>
+                ${x.label.conditions.length ? `<dt>conditions</dt>
+                  <dd>${x.label.conditions.map(esc).join(', ')}</dd>` : ''}
+                ${x.label.compliance_flags.length ? `<dt>compliance</dt>
+                  <dd class="bad">${x.label.compliance_flags.map(esc).join('<br>')}</dd>` : ''}
+                <dt>confidence</dt><dd>${x.label.confidence}</dd>
+              </dl>
+              ${x.label.failure_mode
+                ? `<div class="prose">“${esc(x.label.failure_mode)}”</div>` : ''}
+            ` : '<div class="none">no label for this call</div>'}
+          </div>
+          <div class="vd">
+            <div class="vh"><span>suite assertions</span>
+              <em>${x.grade ? (x.grade.passed ? 'pass' : 'fail') : 'not graded'}</em></div>
+            ${x.grade ? `
+              <dl>${x.grade.failures.length
+                ? x.grade.failures.map(f => `<dt>${esc(f.type)}${
+                    f.severity === 'critical' ? ' [critical]' : ''}</dt>
+                    <dd class="bad">${esc(f.detail)}</dd>`).join('')
+                : '<dt>result</dt><dd class="good">every expectation passed</dd>'}</dl>
+            ` : `<div class="none">No declared scenario covers this situation, so there are
+                 no expectations to run. <strong>The finding is the missing scenario.</strong></div>`}
+          </div>
+        </div>
       </div>`).join('')}`;
 
   const btn = $('#closegap', drawer);

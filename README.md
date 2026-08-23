@@ -66,6 +66,7 @@ make agreement    # inter-labeler agreement
 | `make gap` | `python -m agenttrace.cli close-gap --offline -n 3` |
 | `make gate` | `python -m agenttrace.cli gate --offline` |
 | `make agreement` | `python -m agenttrace.cli agreement` |
+| — | `python -m agenttrace.cli inspect <call_id>` — one call: transcript, label, grade, cluster, cost |
 | `make kyc` | `python -m agenttrace.cli report --domain kyc --offline` |
 | `make serve` | `python -m uvicorn agenttrace.api:app --port 8994` |
 
