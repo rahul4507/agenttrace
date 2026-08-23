@@ -139,3 +139,36 @@ def test_a_bad_fail_probability_is_rejected(tmp_path):
     with pytest.raises(ConfigError) as exc:
         load_domain("broken", directory=tmp_path)
     assert "probability" in str(exc.value)
+
+
+def test_labeling_prompt_inputs_are_pinned():
+    """Any change to the labeling prompt must be an explicit decision.
+
+    The prompt is built from the system text, the user template and SituationLabel's JSON
+    schema -- which pydantic derives from the class docstring and field descriptions. All of
+    it feeds the response cache key, so an incidental edit silently invalidates every
+    recorded response and re-bills the corpus.
+
+    If this fails, the change was intentional: bump LABEL_PROMPT_VERSION, re-record
+    fixtures/llm_responses.db, and update the hash below.
+    """
+    import hashlib
+    import json
+
+    from agenttrace.label import _SYSTEM, _USER, LABEL_PROMPT_VERSION, SituationLabel
+
+    blob = json.dumps(
+        {
+            "system": _SYSTEM,
+            "user": _USER,
+            "schema": SituationLabel.model_json_schema(),
+            "prompt_version": LABEL_PROMPT_VERSION,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    digest = hashlib.sha256(blob.encode()).hexdigest()[:16]
+    assert digest == "4bb5deca61dae1b8", (
+        f"labeling prompt inputs changed (hash {digest}). If deliberate: bump "
+        f"LABEL_PROMPT_VERSION, re-record fixtures/llm_responses.db, and set this hash."
+    )

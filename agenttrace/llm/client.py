@@ -120,8 +120,9 @@ class SarvamChatClient:
     ) -> None:
         self.settings = settings
         self.budget = budget or BudgetGuard(settings.run_budget_inr, name="labeling-run")
-        self.cache = cache or ResponseCache(settings.cache_dir / "responses.db",
-                                            namespace="chat")
+        self.cache = cache or ResponseCache(
+            settings.cache_dir / "responses.db", namespace="chat",
+            seed_from=settings.fixtures_dir / "llm_responses.db")
         self.breaker = breaker or CircuitBreaker(
             fail_threshold=settings.circuit_fail_threshold,
             reset_timeout_s=settings.circuit_reset_s,

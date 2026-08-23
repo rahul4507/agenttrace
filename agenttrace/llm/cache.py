@@ -28,9 +28,18 @@ from typing import Any
 class ResponseCache:
     """SQLite-backed, thread-safe, keyed on everything that affects the output."""
 
-    def __init__(self, path: Path, *, namespace: str = "default") -> None:
+    def __init__(self, path: Path, *, namespace: str = "default",
+                 seed_from: Path | None = None) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Seed from a recorded fixture on first use, so `report --llm` and `agreement` are
+        # reproducible from a clean checkout without an API key. Recorded responses hold
+        # only model output keyed by a hash of the request; no prompts and no transcripts.
+        if seed_from is not None and not self.path.exists():
+            seed = Path(seed_from)
+            if seed.exists():
+                import shutil
+                shutil.copy2(seed, self.path)
         self.namespace = namespace
         self._lock = threading.Lock()
         # One connection with our own lock. Simpler than a pool and writes are infrequent.

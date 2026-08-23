@@ -81,7 +81,11 @@ def save_known_slugs(cache_dir, domain: str, slugs: set[str]) -> None:
 
 
 class SituationLabel(BaseModel):
-    """Labeler output for one conversation."""
+    """What the labeler must produce for one conversation."""
+    # NOTE: pydantic copies this docstring into model_json_schema()["description"], the
+    # schema is serialised into the labeling prompt, and the prompt is part of the response
+    # cache key. Editing it therefore invalidates every recorded response. test_domains.py
+    # pins the schema hash so a change fails loudly instead of silently re-billing.
 
     situation: str = Field(
         description="snake_case slug for what the call was ABOUT, from the CALLER's point "
@@ -138,11 +142,23 @@ class LabelRun:
     def failures(self) -> list[LabelResult]:
         return [r for r in self.results if not r.ok]
 
+    @property
+    def spent_inr(self) -> float:
+        """Cost actually incurred by this run.
+
+        `cost_inr` totals the recorded cost of every label including cached ones, so it
+        answers "what did producing these labels cost" rather than "what did this run
+        spend". Reporting the former as the latter overstates spend on a cached run.
+        """
+        return sum(r.cost_inr for r in self.results if not r.from_cache)
+
     def summary(self) -> str:
         ok = len(self.labels)
         cached = sum(1 for r in self.results if r.from_cache)
         s = (f"labeled {ok}/{len(self.results)} conversations "
-             f"({cached} from cache), Rs {self.cost_inr:.2f}")
+             f"({cached} from cache), spent Rs {self.spent_inr:.2f}")
+        if cached and self.cost_inr > self.spent_inr:
+            s += f" (Rs {self.cost_inr:.2f} recorded)"
         if self.stopped_early:
             s += f" -- STOPPED EARLY: {self.stopped_early}"
         return s
