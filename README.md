@@ -72,11 +72,27 @@ make agreement    # inter-labeler agreement
 Everything except `report-llm` and `agreement` runs with no network and no API key. CI uses
 only the offline path.
 
+### Docker
+
+The most reliable path on any host, and the only one verified end to end on a machine with
+no local Python:
+
+```bash
+docker compose up            # dashboard on http://localhost:8078
+# or
+make docker-test             # run the 81 tests in the container
+make docker-up               # dashboard
+docker run --rm agenttrace:local python -m agenttrace.cli report --offline
+```
+
+The image is ~66 MB and carries the fixtures, so `report --llm` and `agreement` work inside
+it with no API key.
+
 ### NixOS
 
 `make venv` is the wrong entry point on NixOS: pip-installed manylinux wheels with compiled
 extensions (`pydantic-core`, `ruff`) link against paths that do not exist there. Take
-dependencies from nixpkgs instead.
+dependencies from nixpkgs instead — or use Docker above, which avoids the question.
 
 ```bash
 nix develop          # flake.nix — provides python, ruff and gnumake

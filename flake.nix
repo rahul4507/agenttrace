@@ -15,8 +15,11 @@
           # Dependencies come from nixpkgs rather than pip. On NixOS a pip-installed
           # manylinux wheel with a compiled extension (pydantic-core, ruff) links against
           # paths that do not exist, so `make venv` is the wrong entry point there.
+          # fastapi's own test suite pulls inline-snapshot, which has itself failed to
+          # build on some nixpkgs revisions and takes the whole closure down with it.
+          # We are not developing fastapi, so its checks are not ours to run.
           python = pkgs.python312.withPackages (ps: with ps; [
-            fastapi
+            (fastapi.overridePythonAttrs (_: { doCheck = false; }))
             uvicorn
             httpx
             pydantic
@@ -54,7 +57,8 @@
       apps = forAllSystems (pkgs:
         let
           python = pkgs.python312.withPackages (ps: with ps; [
-            fastapi uvicorn httpx pydantic pyyaml rich
+            (fastapi.overridePythonAttrs (_: { doCheck = false; }))
+            uvicorn httpx pydantic pyyaml rich
           ]);
         in
         {

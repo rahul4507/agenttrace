@@ -6,8 +6,10 @@
 { pkgs ? import <nixpkgs> { } }:
 
 let
+  # See flake.nix: fastapi's test-suite dependency has broken builds on some nixpkgs
+  # revisions, and we are not developing fastapi.
   python = pkgs.python312.withPackages (ps: with ps; [
-    fastapi
+    (fastapi.overridePythonAttrs (_: { doCheck = false; }))
     uvicorn
     httpx
     pydantic

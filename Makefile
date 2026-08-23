@@ -4,7 +4,8 @@ VENV ?= .venv
 PY   ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 PORT ?= 8078
 
-.PHONY: help venv corpus kyc report report-llm diff gap gate agreement serve test lint clean
+.PHONY: help venv corpus kyc report report-llm diff gap gate agreement serve test lint clean \
+        docker docker-up docker-test docker-sh
 
 help:
 	@echo "AgentTrace - coverage and regression analysis for voice agents"
@@ -23,6 +24,11 @@ help:
 	@echo "  make serve       dashboard on http://127.0.0.1:$(PORT)"
 	@echo ""
 	@echo "  make corpus      regenerate the synthetic collections corpus (seeded)"
+	@echo ""
+	@echo "Docker (no local python needed):"
+	@echo "  make docker      build the image"
+	@echo "  make docker-up   dashboard on http://localhost:$(PORT)"
+	@echo "  make docker-test run the test suite in the container"
 
 venv:
 	python3 -m venv $(VENV)
@@ -67,3 +73,20 @@ lint:
 clean:
 	rm -rf .cache .ruff_cache .pytest_cache
 	find . -type d -name __pycache__ -exec rm -rf {} +
+
+# ---- Docker ----------------------------------------------------------------
+# The path of least resistance on a host where pip wheels or nixpkgs give trouble.
+
+IMAGE ?= agenttrace:local
+
+docker:
+	docker build -t $(IMAGE) .
+
+docker-up: docker
+	docker run --rm -p $(PORT):8078 $(IMAGE)
+
+docker-test: docker
+	docker run --rm $(IMAGE) python -m pytest
+
+docker-sh: docker
+	docker run --rm -it $(IMAGE) bash
