@@ -56,8 +56,46 @@ make report-llm   # label with Sarvam-105B (~Rs 0.08/conversation, cached afterw
 make agreement    # inter-labeler agreement
 ```
 
+`make` is a convenience. Every target is one command:
+
+| Target | Equivalent |
+|---|---|
+| `make test` | `python -m pytest` |
+| `make report` | `python -m agenttrace.cli report --offline` |
+| `make diff` | `python -m agenttrace.cli diff --offline` |
+| `make gap` | `python -m agenttrace.cli close-gap --offline -n 3` |
+| `make gate` | `python -m agenttrace.cli gate --offline` |
+| `make agreement` | `python -m agenttrace.cli agreement` |
+| `make kyc` | `python -m agenttrace.cli report --domain kyc --offline` |
+| `make serve` | `python -m uvicorn agenttrace.api:app --port 8078` |
+
 Everything except `report-llm` and `agreement` runs with no network and no API key. CI uses
 only the offline path.
+
+### NixOS
+
+`make venv` is the wrong entry point on NixOS: pip-installed manylinux wheels with compiled
+extensions (`pydantic-core`, `ruff`) link against paths that do not exist there. Take
+dependencies from nixpkgs instead.
+
+```bash
+nix develop          # flake.nix — provides python, ruff and gnumake
+# or
+nix-shell            # shell.nix, for non-flake setups
+```
+
+Then the `make` targets work as documented. Without a shell at all:
+
+```bash
+nix-shell -p 'python312.withPackages(ps: with ps; [
+    fastapi uvicorn httpx pydantic pyyaml rich pytest ])'
+
+python -m pytest
+python -m agenttrace.cli report --offline
+python -m uvicorn agenttrace.api:app --port 8078
+```
+
+`nix run` starts the dashboard without entering a shell.
 
 ## Two coverage numbers
 

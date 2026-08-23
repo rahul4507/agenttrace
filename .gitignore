@@ -17,6 +17,11 @@ dist/
 .venv/
 venv/
 
+# nix
+result
+result-*
+.direnv/
+
 # tooling
 .pytest_cache/
 .ruff_cache/
