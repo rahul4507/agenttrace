@@ -16,8 +16,8 @@ RUN useradd --create-home --uid 10001 app \
     && chown -R app:app /app
 USER app
 
-EXPOSE 8078
+EXPOSE 8124
 
-# 0.0.0.0 so the port is reachable from the host; publish it with -p 8078:8078.
+# 0.0.0.0 so the port is reachable from the host; publish it with -p 8124:8124.
 CMD ["python", "-m", "uvicorn", "agenttrace.api:app", \
-     "--host", "0.0.0.0", "--port", "8078"]
+     "--host", "0.0.0.0", "--port", "8124"]

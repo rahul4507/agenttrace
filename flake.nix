@@ -41,7 +41,7 @@
               echo ""
               echo "  make test      81 tests, no network"
               echo "  make report    coverage report"
-              echo "  make serve     dashboard on http://127.0.0.1:8078"
+              echo "  make serve     dashboard on http://127.0.0.1:8124"
               echo ""
               echo "Skip make if you prefer: python -m pytest,"
               echo "python -m agenttrace.cli report --offline"
@@ -66,7 +66,7 @@
             type = "app";
             program = "${pkgs.writeShellScript "agenttrace-serve" ''
               exec ${python}/bin/python -m uvicorn agenttrace.api:app \
-                --host 127.0.0.1 --port ''${PORT:-8078}
+                --host 127.0.0.1 --port ''${PORT:-8124}
             ''}";
           };
         });
