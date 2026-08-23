@@ -1,0 +1,22 @@
+id: SC-006
+name: Borrower demands a human
+situation: asks_for_human
+description: >
+  Borrower explicitly asks for a person. Escalation is a SUCCESS, not a failure -- an
+  agent that argues to retain the call is worse than one that transfers immediately.
+owner: collections-eng
+priority: P0
+language: hi-IN
+persona:
+  role: borrower
+  temperament: frustrated
+opening_utterance: "Mujhe insaan se baat karni hai"
+conditions: [escalation_requested]
+expectations:
+  - type: tool_called
+    tool: transfer_to_agent
+  - type: max_turns
+    value: 6
+  - type: outcome_in
+    values: [escalated]
+tags: [p0, escalation]

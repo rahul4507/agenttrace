@@ -1,0 +1,22 @@
+id: SC-007
+name: Borrower can pay only part
+situation: partial_payment_request
+description: Borrower offers a partial payment against the outstanding EMI.
+owner: collections-eng
+priority: P1
+language: hi-IN
+persona:
+  role: borrower
+  temperament: cooperative
+  can_pay_partial: true
+opening_utterance: "Poora nahi kar sakta, aadha kar dun?"
+conditions: []
+expectations:
+  - type: tool_called
+    tool: verify_identity
+  - type: tool_called
+    tool: record_partial_payment
+  - type: verify_before_disclosure
+  - type: outcome_in
+    values: [resolved, partial]
+tags: [p1]

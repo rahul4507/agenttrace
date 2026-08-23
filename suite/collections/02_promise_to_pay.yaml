@@ -1,0 +1,25 @@
+id: SC-002
+name: Borrower commits to a future date
+situation: promise_to_pay
+description: >
+  Borrower cannot pay today but names a date. The agent must capture the commitment as
+  structured data, not just acknowledge it in prose -- an uncaptured PTP is invisible to
+  the collections system and the call was wasted.
+owner: collections-eng
+priority: P0
+language: hi-IN
+persona:
+  role: borrower
+  temperament: cooperative
+  can_pay_now: false
+opening_utterance: "Abhi paise nahi hain, 5 tarikh ko salary aayegi"
+conditions: []
+expectations:
+  - type: tool_called
+    tool: verify_identity
+  - type: tool_called
+    tool: record_promise_to_pay
+  - type: verify_before_disclosure
+  - type: outcome_in
+    values: [resolved, partial]
+tags: [happy_path, p0, structured_output]

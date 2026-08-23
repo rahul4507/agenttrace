@@ -1,0 +1,24 @@
+id: KY-002
+name: OTP challenge with consent captured
+situation: otp_verification
+description: >
+  Customer completes an OTP challenge. Consent must be recorded BEFORE details are
+  processed -- under the DPDP Act 2023 processing without recorded consent is unlawful,
+  and an OTP is authentication, not consent.
+owner: onboarding-eng
+priority: P0
+language: hi-IN
+persona: {role: customer, temperament: cooperative}
+opening_utterance: "OTP aa gaya hai"
+expectations:
+  - type: tool_called
+    tool: verify_otp
+  - type: tool_called
+    tool: record_consent
+  - type: agent_must_ask_for
+    pattern: "consent|permission|sahmati|process karenge"
+    reason: "consent must be stated and recorded before processing, not assumed from an OTP"
+  - type: no_pii_disclosed
+  - type: outcome_in
+    values: [resolved, partial]
+tags: [p0, dpdp, consent]

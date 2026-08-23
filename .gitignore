@@ -1,0 +1,31 @@
+# secrets -- never commit
+.env
+.env.local
+
+# runtime state
+.cache/
+*.log
+llm-report.json
+report.json
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# editors / os
+.vscode/
+.idea/
+*.swp
+.DS_Store

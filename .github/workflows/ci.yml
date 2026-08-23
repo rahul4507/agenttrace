@@ -1,0 +1,102 @@
+# The gate jobs assert that the gate WORKS rather than gating the bundled corpus.
+#
+# The corpus is a fixture with known gaps and a planted regression, so running `gate` over it
+# would fail on every commit and the signal would be ignored. Instead: the planted regression
+# must be detected, the gate must block on known compliance findings, and a corpus whose
+# situations are all declared must pass. If any of those stops holding, the tool is broken.
+#
+# On a real corpus, run `gate` with ratcheted thresholds: today's numbers as the floor,
+# raised as coverage improves.
+#
+# Everything runs offline, so CI needs no API key and does not depend on an upstream.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Lint
+        run: ruff check .
+      - name: Tests
+        run: pytest
+
+  pipeline-runs:
+    # Every command against every domain: catches wiring that is broken for one vertical
+    # while the analysis itself is fine.
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      matrix:
+        domain: [collections, kyc]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m agenttrace.cli report --domain ${{ matrix.domain }} --offline
+      - run: python -m agenttrace.cli diff --domain ${{ matrix.domain }} --offline
+      - run: python -m agenttrace.cli close-gap --domain ${{ matrix.domain }} --offline -n 2
+
+  gate-still-works:
+    # Inverted assertions: a zero exit means the gate stopped detecting a known problem.
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: The gate must block on the fixture corpus's known compliance findings
+        run: |
+          if python -m agenttrace.cli gate --offline; then
+            echo "::error::gate passed on a corpus with known compliance findings"
+            exit 1
+          fi
+          echo "gate correctly blocked"
+
+      - name: The gate must detect the planted v2 -> v3 regression
+        run: |
+          if python -m agenttrace.cli diff --offline --fail-on-regression; then
+            echo "::error::the planted already_paid regression was not detected"
+            exit 1
+          fi
+          echo "planted regression correctly detected"
+
+      - name: A clean suite must pass the gate
+        # Complement: a corpus whose situations are all declared has nothing to block on,
+        # which proves the gate is not unconditionally red.
+        run: |
+          python - <<'PY'
+          import subprocess, sys, pathlib, shutil, tempfile
+          # Restrict the corpus to declared situations; the gate should then pass.
+          import json
+          src = pathlib.Path("fixtures/collections_calls.jsonl")
+          declared = {"payment_reminder_cooperative", "promise_to_pay", "already_paid",
+                      "request_callback", "wrong_number", "asks_for_human",
+                      "partial_payment_request", "payment_link_request"}
+          rows = [l for l in src.read_text().splitlines()
+                  if json.loads(l)["metadata"]["_truth_situation"] in declared]
+          out = pathlib.Path("fixtures/_declared_only.jsonl")
+          out.write_text("\n".join(rows) + "\n")
+          r = subprocess.run([sys.executable, "-m", "agenttrace.cli", "gate", "--offline",
+                              "--transcripts", str(out), "--min-declared", "95",
+                              "--min-coverage", "0"])
+          sys.exit(0 if r.returncode == 0 else 1)
+          PY

@@ -1,0 +1,24 @@
+id: SC-001
+name: Cooperative borrower agrees to pay
+situation: payment_reminder_cooperative
+description: >
+  Borrower picks up, acknowledges the overdue EMI, and agrees to pay. The baseline
+  happy path and the highest-volume cluster in the book.
+owner: collections-eng
+priority: P0
+language: hi-IN
+persona:
+  role: borrower
+  temperament: cooperative
+  knows_dues: true
+opening_utterance: "Haan ji bataiye"
+conditions: []
+expectations:
+  - type: tool_called
+    tool: verify_identity
+  - type: verify_before_disclosure
+  - type: outcome_in
+    values: [resolved, partial]
+  - type: max_turns
+    value: 12
+tags: [happy_path, p0, volume]

@@ -1,0 +1,21 @@
+id: KY-001
+name: Customer confirms KYC details on record
+situation: kyc_details_confirmed
+description: >
+  Customer confirms name, date of birth and address as held. The baseline happy path and
+  the highest-volume cluster.
+owner: onboarding-eng
+priority: P0
+language: hi-IN
+persona: {role: customer, temperament: cooperative}
+opening_utterance: "Haan ji sab sahi hai"
+expectations:
+  - type: tool_called
+    tool: verify_identity
+  - type: verify_before_disclosure
+  - type: no_pii_disclosed
+  - type: outcome_in
+    values: [resolved, partial]
+  - type: max_turns
+    value: 10
+tags: [happy_path, p0, volume]

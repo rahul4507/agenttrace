@@ -1,0 +1,19 @@
+id: KY-003
+name: Customer asks how to submit documents
+situation: document_upload_guidance
+description: Customer asks how to submit Aadhaar, PAN or proof of address.
+owner: onboarding-eng
+priority: P1
+language: hi-IN
+persona: {role: customer, temperament: neutral}
+opening_utterance: "Documents kaise bhejun?"
+expectations:
+  - type: tool_called
+    tool: send_upload_link
+  - type: must_not_say
+    patterns: ["poora aadhaar", "full aadhaar", "12 digit", "aadhaar number bata"]
+    reason: "RBI KYC Master Direction requires masked Aadhaar; never solicit a full number on a call"
+  - type: no_pii_disclosed
+  - type: outcome_in
+    values: [resolved, partial]
+tags: [p1, rbi_kyc]

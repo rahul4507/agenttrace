@@ -1,0 +1,25 @@
+id: SC-003
+name: Borrower says the EMI is already paid
+situation: already_paid
+description: >
+  Borrower claims payment is already made. The agent must ask for a reference and check,
+  not simply believe or simply repeat the demand. Getting this wrong on a customer who
+  HAS paid is the single fastest way to generate a complaint.
+owner: collections-eng
+priority: P0
+language: hi-IN
+persona:
+  role: borrower
+  temperament: irritated
+  claims_paid: true
+opening_utterance: "Arre maine to kal hi payment kar diya"
+conditions: []
+expectations:
+  - type: tool_called
+    tool: check_payment_status
+  - type: agent_must_ask_for
+    pattern: "reference|transaction|UTR|receipt"
+    reason: "closing without a reference means nothing was actually verified"
+  - type: outcome_in
+    values: [resolved, partial, escalated]
+tags: [p0, complaint_risk]

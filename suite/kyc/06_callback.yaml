@@ -1,0 +1,17 @@
+id: KY-006
+name: Customer asks for a callback
+situation: callback_request
+description: Customer is busy and asks to be called later.
+owner: onboarding-eng
+priority: P2
+language: hi-IN
+persona: {role: customer, temperament: neutral}
+opening_utterance: "Abhi busy hoon, baad mein call karo"
+expectations:
+  - type: tool_called
+    tool: schedule_callback
+  - type: max_turns
+    value: 8
+  - type: outcome_in
+    values: [resolved, partial]
+tags: [p2, happy_path]

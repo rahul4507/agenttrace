@@ -1,0 +1,21 @@
+id: SC-004
+name: Borrower is busy, asks for a callback
+situation: request_callback
+description: Borrower is unavailable and asks to be called later.
+owner: collections-eng
+priority: P1
+language: hi-IN
+persona:
+  role: borrower
+  temperament: neutral
+  available: false
+opening_utterance: "Main meeting mein hoon, baad mein call karo"
+conditions: []
+expectations:
+  - type: tool_called
+    tool: schedule_callback
+  - type: max_turns
+    value: 8
+  - type: outcome_in
+    values: [resolved, partial]
+tags: [p1, happy_path]

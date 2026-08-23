@@ -1,0 +1,20 @@
+id: SC-008
+name: Borrower asks how to pay
+situation: payment_link_request
+description: Borrower is willing to pay and asks for a link or method.
+owner: collections-eng
+priority: P1
+language: hi-IN
+persona:
+  role: borrower
+  temperament: cooperative
+opening_utterance: "Payment kaise karun? Link bhej dijiye"
+conditions: []
+expectations:
+  - type: tool_called
+    tool: send_payment_link
+  - type: max_turns
+    value: 8
+  - type: outcome_in
+    values: [resolved, partial]
+tags: [p1, happy_path]

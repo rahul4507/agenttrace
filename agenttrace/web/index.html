@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentTrace — coverage for voice agents</title>
+<style>
+/* Design tokens. Light is the base; dark steps are declared under both the OS media
+   query and the data-theme scope so an explicit toggle wins in either direction. */
+:root {
+  color-scheme: light;
+  --surface-0: #f4f3f0;
+  --surface-1: #fcfcfb;
+  --surface-2: #eeede9;
+  --border:    #dcdbd5;
+  --border-strong: #c6c5bd;
+  --text-1: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #7c7b76;
+
+  /* status palette — fixed, never themed. Always paired with a glyph + word. */
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+
+  /* categorical slots, fixed order, for the cost breakdown */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-0: #121211;
+    --surface-1: #1a1a19;
+    --surface-2: #232322;
+    --border:    #343432;
+    --border-strong: #4a4a47;
+    --text-1: #ffffff;
+    --text-2: #c3c2b7;
+    --text-3: #91908a;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #121211; --surface-1: #1a1a19; --surface-2: #232322;
+  --border: #343432; --border-strong: #4a4a47;
+  --text-1: #ffffff; --text-2: #c3c2b7; --text-3: #91908a;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--surface-0); color: var(--text-1);
+  font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 20px 80px; }
+
+/* ---- header ---- */
+header { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;
+         padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; font-weight: 650; }
+h1 .tag { font-family: var(--mono); font-size: 10px; font-weight: 500; padding: 2px 6px;
+          border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-2);
+          margin-left: 8px; vertical-align: 2px; text-transform: uppercase;
+          letter-spacing: 0.06em; }
+.thesis { color: var(--text-2); font-size: 13px; margin: 6px 0 0; max-width: 64ch; }
+.thesis b { color: var(--text-1); font-weight: 600; }
+.spacer { flex: 1; }
+button.ghost { font: inherit; font-size: 12px; padding: 6px 11px; border-radius: 6px;
+  border: 1px solid var(--border-strong); background: var(--surface-1);
+  color: var(--text-1); cursor: pointer; }
+button.ghost:hover { background: var(--surface-2); }
+
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.07em;
+     color: var(--text-2); margin: 34px 0 4px; font-weight: 620; }
+.sub { color: var(--text-3); font-size: 12.5px; margin: 0 0 14px; max-width: 76ch; }
+
+/* ---- KPI tiles ---- */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+        gap: 12px; margin-top: 20px; }
+.kpi { background: var(--surface-1); border: 1px solid var(--border);
+       border-radius: 10px; padding: 14px 16px; }
+.kpi .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+          color: var(--text-3); font-weight: 600; }
+.kpi .v { font-size: 29px; font-weight: 660; letter-spacing: -0.02em; margin-top: 4px;
+          font-variant-numeric: tabular-nums; }
+.kpi .n { font-size: 12px; color: var(--text-2); margin-top: 3px; }
+/* Meter. */
+.meter { height: 7px; border-radius: 4px; background: var(--surface-2); margin-top: 9px;
+         overflow: hidden; }
+.meter > i { display: block; height: 100%; border-radius: 4px; }
+
+/* Status chips: glyph plus word, so colour is never the only signal. */
+.chip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono);
+        font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.05em; padding: 2px 7px 2px 5px; border-radius: 5px;
+        border: 1px solid; white-space: nowrap; }
+.chip .g { font-size: 11px; line-height: 1; }
+.chip.covered   { color: var(--good);     border-color: color-mix(in oklab, var(--good) 45%, transparent);     background: color-mix(in oklab, var(--good) 10%, transparent); }
+.chip.partial   { color: var(--serious);  border-color: color-mix(in oklab, var(--serious) 50%, transparent);  background: color-mix(in oklab, var(--serious) 12%, transparent); }
+.chip.uncovered { color: var(--critical); border-color: color-mix(in oklab, var(--critical) 50%, transparent); background: color-mix(in oklab, var(--critical) 11%, transparent); }
+.chip.compliance{ color: var(--critical); border-color: var(--critical);
+                  background: color-mix(in oklab, var(--critical) 16%, transparent); }
+
+/* ---- coverage matrix ---- */
+.matrix { display: grid; grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
+          gap: 8px; }
+.cell { background: var(--surface-1); border: 1px solid var(--border); border-left-width: 3px;
+        border-radius: 8px; padding: 10px 11px; cursor: pointer; text-align: left;
+        font: inherit; color: inherit; display: block; width: 100%;
+        transition: transform .08s ease, border-color .08s ease; }
+.cell:hover { transform: translateY(-1px); border-color: var(--border-strong); }
+.cell:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+.cell.covered   { border-left-color: var(--good); }
+.cell.partial   { border-left-color: var(--serious); }
+.cell.uncovered { border-left-color: var(--critical); }
+.cell .name { font-weight: 600; font-size: 12.5px; line-height: 1.3;
+              display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+              overflow: hidden; }
+.cell .row { display: flex; align-items: baseline; gap: 8px; margin-top: 7px;
+             font-family: var(--mono); font-size: 11px; color: var(--text-2);
+             font-variant-numeric: tabular-nums; }
+.cell .row b { color: var(--text-1); font-size: 13px; font-weight: 650; }
+.cell .flag { margin-top: 7px; font-family: var(--mono); font-size: 9px;
+              color: var(--critical); font-weight: 600; letter-spacing: 0.02em;
+              text-transform: uppercase; line-height: 1.35;
+              /* wraps at the inserted zero-width spaces; `anywhere` as a fallback */
+              overflow-wrap: anywhere; }
+
+/* ---- tables ---- */
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+thead th { text-align: left; font-size: 10.5px; text-transform: uppercase;
+           letter-spacing: 0.06em; color: var(--text-3); font-weight: 620;
+           padding: 7px 9px; border-bottom: 1px solid var(--border-strong); }
+tbody td { padding: 8px 9px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:hover { background: var(--surface-1); }
+.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tbl-wrap { overflow-x: auto; background: var(--surface-1); border: 1px solid var(--border);
+            border-radius: 10px; padding: 4px 6px; }
+/* Fail-rate bar inside a table cell. */
+.inline-bar { display: inline-block; width: 54px; height: 6px; border-radius: 3px;
+              background: var(--surface-2); overflow: hidden; vertical-align: middle;
+              margin-right: 7px; }
+.inline-bar > i { display: block; height: 100%; border-radius: 3px; }
+.mono { font-family: var(--mono); }
+.dim { color: var(--text-3); }
+
+/* ---- callout ---- */
+.callout { background: var(--surface-1); border: 1px solid var(--border);
+           border-left: 3px solid var(--warning); border-radius: 8px;
+           padding: 13px 15px; margin: 0 0 14px; font-size: 13px; }
+.callout b { font-weight: 650; }
+.callout .big { font-family: var(--mono); font-size: 15px; font-weight: 650; }
+
+/* Cost: stacked bar with 2px surface gaps and direct labels. */
+.stack { display: flex; height: 34px; border-radius: 6px; overflow: hidden;
+         background: var(--surface-2); gap: 2px; }
+.stack > i { display: block; height: 100%; }
+.stack > i:first-child { border-radius: 6px 0 0 6px; }
+.stack > i:last-child  { border-radius: 0 6px 6px 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 11px;
+          font-size: 12px; color: var(--text-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legend b { color: var(--text-1); font-family: var(--mono); font-weight: 620;
+            font-variant-numeric: tabular-nums; }
+
+.grid2 { display: grid; grid-template-columns: 1.5fr 1fr; gap: 14px; align-items: start; }
+@media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+.card { background: var(--surface-1); border: 1px solid var(--border);
+        border-radius: 10px; padding: 15px 17px; }
+.card h3 { margin: 0 0 3px; font-size: 13px; font-weight: 640; }
+.card p.h { margin: 0 0 13px; font-size: 12px; color: var(--text-3); }
+
+/* ---- drawer ---- */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.44); opacity: 0;
+         pointer-events: none; transition: opacity .16s; z-index: 40; }
+.scrim.on { opacity: 1; pointer-events: auto; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(660px, 94vw);
+          background: var(--surface-0); border-left: 1px solid var(--border-strong);
+          transform: translateX(100%); transition: transform .18s ease; z-index: 41;
+          overflow-y: auto; padding: 22px 24px 60px; }
+.drawer.on { transform: none; }
+.drawer h3 { margin: 0; font-size: 16px; font-weight: 650; }
+.xr { position: absolute; top: 16px; right: 18px; }
+.turn { font-family: var(--mono); font-size: 11.5px; padding: 5px 8px; border-radius: 5px;
+        margin-bottom: 3px; line-height: 1.45; }
+.turn.agent  { background: var(--surface-2); }
+.turn.caller { background: color-mix(in oklab, var(--series-1) 11%, var(--surface-1)); }
+.turn .who { color: var(--text-3); font-weight: 650; margin-right: 6px; }
+.ex { border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px;
+      margin-bottom: 11px; background: var(--surface-1); }
+.ex .hd { display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
+          font-family: var(--mono); font-size: 10.5px; color: var(--text-2);
+          margin-bottom: 8px; }
+.fail { font-size: 11.5px; color: var(--critical); font-family: var(--mono);
+        margin-top: 7px; padding-left: 9px; border-left: 2px solid var(--critical); }
+pre.yaml { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+           padding: 12px; font-family: var(--mono); font-size: 11px; overflow-x: auto;
+           line-height: 1.5; margin: 10px 0 0; }
+button.primary { font: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 14px;
+  border-radius: 7px; border: 1px solid var(--critical); cursor: pointer;
+  background: color-mix(in oklab, var(--critical) 14%, transparent); color: var(--critical); }
+button.primary:hover { background: color-mix(in oklab, var(--critical) 22%, transparent); }
+.tooltip { position: fixed; z-index: 60; pointer-events: none; opacity: 0;
+  background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: 7px;
+  padding: 7px 10px; font-family: var(--mono); font-size: 11px; color: var(--text-1);
+  box-shadow: 0 6px 20px rgba(0,0,0,.16); transition: opacity .1s; max-width: 280px; }
+.tooltip.on { opacity: 1; }
+.loading { color: var(--text-3); padding: 40px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>AgentTrace <span class="tag">coverage report</span></h1>
+      <p class="thesis">
+        The difference between what production does and what the declared scenario suite
+        covers. Situations are extracted from transcripts, clustered, and matched against
+        the suite; gaps are ranked by volume, failure rate and regulatory consequence.
+      </p>
+    </div>
+    <div class="spacer"></div>
+    <button class="ghost" id="theme">theme</button>
+  </header>
+
+  <div id="app"><div class="loading">loading report…</div></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-live="polite"></aside>
+<div class="tooltip" id="tip"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const inr = n => '₹' + Number(n).toLocaleString('en-IN', {maximumFractionDigits: 0});
+const inr2 = n => '₹' + Number(n).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const pct = n => (100 * n).toFixed(0) + '%';
+const titleize = s => String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+/* Zero-width space after each underscore, giving the browser a break point inside a long
+   snake_case slug so it wraps at boundaries rather than mid-word. */
+const breakable = s => String(s).replace(/_/g, '_\u200b');
+
+const GLYPH = {covered: '✓', partial: '◐', uncovered: '✕'};
+const STATUS_WORD = {covered: 'covered', partial: 'partial', uncovered: 'uncovered'};
+
+/* Status palette: coverage is a state rather than a magnitude. */
+const covColour = p => p >= 85 ? 'var(--good)' : p >= 65 ? 'var(--warning)' : 'var(--critical)';
+
+function chip(status, critical) {
+  if (critical) return `<span class="chip compliance"><span class="g">▲</span>compliance</span>`;
+  return `<span class="chip ${status}"><span class="g">${GLYPH[status]}</span>${STATUS_WORD[status]}</span>`;
+}
+
+/* Tooltip */
+const tip = $('#tip');
+function bindTip(el, html) {
+  el.addEventListener('mousemove', e => {
+    tip.innerHTML = html;
+    tip.classList.add('on');
+    const pad = 14;
+    let x = e.clientX + pad, y = e.clientY + pad;
+    const r = tip.getBoundingClientRect();
+    if (x + r.width > innerWidth - 8) x = e.clientX - r.width - pad;
+    if (y + r.height > innerHeight - 8) y = e.clientY - r.height - pad;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  });
+  el.addEventListener('mouseleave', () => tip.classList.remove('on'));
+}
+
+let REPORT = null, DIFF = null, COSTS = null;
+
+async function boot() {
+  try {
+    [REPORT, COSTS] = await Promise.all([
+      fetch('/api/report').then(r => r.json()),
+      fetch('/api/costs').then(r => r.json()),
+    ]);
+    const vs = REPORT.meta.versions || [];
+    if (vs.length >= 2) {
+      DIFF = await fetch(`/api/diff?baseline=${vs[0]}&candidate=${vs[vs.length-1]}`).then(r => r.json());
+    }
+    render();
+  } catch (e) {
+    $('#app').innerHTML = `<div class="loading">could not load: ${esc(e.message)}</div>`;
+  }
+}
+
+function render() {
+  const s = REPORT.summary, m = REPORT.meta;
+  const gaps = REPORT.rows.filter(r => r.status !== 'covered').sort((a, b) => b.priority - a.priority);
+  const app = $('#app');
+
+  app.innerHTML = `
+  <div class="kpis">
+    <div class="kpi">
+      <div class="k">declared</div>
+      <div class="v" style="color:${covColour(s.declared_pct)}">${s.declared_pct}%</div>
+      <div class="meter"><i style="width:${s.declared_pct}%;background:${covColour(s.declared_pct)}"></i></div>
+      <div class="n">traffic in a situation the suite names at all</div>
+    </div>
+    <div class="kpi">
+      <div class="k">fully covered</div>
+      <div class="v" style="color:${covColour(s.coverage_pct)}">${s.coverage_pct}%</div>
+      <div class="meter"><i style="width:${s.coverage_pct}%;background:${covColour(s.coverage_pct)}"></i></div>
+      <div class="n">&hellip;and tested for the conditions production shows. The gap to
+        <em>declared</em> is work on existing scenarios</div>
+    </div>
+    <div class="kpi">
+      <div class="k">untested calls</div>
+      <div class="v" style="color:var(--critical)">${s.uncovered_volume}</div>
+      <div class="n">${s.uncovered} of ${s.clusters} clusters have no scenario at all;
+        ${s.partial_volume} more calls are declared but under-tested</div>
+    </div>
+    <div class="kpi">
+      <div class="k">unaddressed spend</div>
+      <div class="v">${inr(s.unaddressed_spend_inr)}</div>
+      <div class="n">spent on failing calls in untested situations</div>
+    </div>
+    <div class="kpi">
+      <div class="k">declared suite</div>
+      <div class="v">${s.suite_size}</div>
+      <div class="n">${m.graded} calls graded · <span style="color:var(--critical)">${m.graded_critical} critical</span> assertion failures</div>
+    </div>
+  </div>
+
+  <h2>Coverage matrix</h2>
+  <p class="sub">Every situation found in production. Green is declared and fully covered,
+     amber is declared with untested conditions, red has no scenario at all. Click a cell for
+     transcripts. Ordered by <span class="mono">volume × failure rate × consequence</span>.</p>
+  <div class="matrix" id="matrix"></div>
+
+  <h2>Ranked gaps</h2>
+  <p class="sub">Uncovered and partially covered clusters, ranked.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>situation</th><th>state</th>
+        <th class="num">calls</th><th>failure rate</th>
+        <th class="num">wasted</th><th>compliance</th><th class="num">priority</th>
+      </tr></thead>
+      <tbody>${gaps.map((r, i) => `
+        <tr>
+          <td class="num dim">${i + 1}</td>
+          <td><b>${esc(titleize(r.key))}</b></td>
+          <td>${chip(r.status, r.is_critical)}</td>
+          <td class="num">${r.volume}</td>
+          <td><span class="inline-bar"><i style="width:${100*r.fail_rate}%;background:var(--critical)"></i></span><span class="mono">${pct(r.fail_rate)}</span></td>
+          <td class="num">${inr(r.failed_cost_inr)}</td>
+          <td class="mono" style="font-size:10.5px;color:var(--critical)">${
+            (r.compliance_detail||[]).map(f => `${esc(f.flag)} <span class="dim">${f.count}/${r.volume}</span>`).join('<br>')
+            || '<span class="dim">—</span>'}</td>
+          <td class="num dim">${r.priority.toFixed(4)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  ${DIFF ? renderDiff() : ''}
+
+  <h2>Cost economics</h2>
+  <p class="sub">Per-conversation cost by component. A rate card is per-unit, but a call
+     spends across STT, LLM, TTS and telephony simultaneously.</p>
+  <div class="grid2">
+    <div class="card">
+      <h3>Cost per call by component</h3>
+      <p class="h">Self-orchestrated on Sarvam's model APIs, ${COSTS.n_conversations} calls.</p>
+      <div class="stack" id="stack"></div>
+      <div class="legend" id="stack-legend"></div>
+      <details style="margin-top:14px">
+        <summary class="dim" style="cursor:pointer;font-size:12px">table view</summary>
+        <div class="tbl-wrap" style="margin-top:9px">
+          <table><thead><tr><th>component</th><th class="num">₹ / call</th><th class="num">share</th></tr></thead>
+          <tbody id="cost-rows"></tbody></table>
+        </div>
+      </details>
+    </div>
+    <div class="card">
+      <h3>Managed vs self-orchestrated</h3>
+      <p class="h">Same usage, both pricing models.</p>
+      <table>
+        <tbody>
+          <tr><td>managed Voice Agents</td><td class="num"><b>${inr2(COSTS.platform.per_call_inr)}</b></td></tr>
+          <tr><td>self-orchestrated</td><td class="num"><b>${inr2(COSTS.component.per_call_inr)}</b></td></tr>
+          <tr><td class="dim">managed premium</td><td class="num mono" style="color:var(--warning)">${COSTS.managed_premium_x}×</td></tr>
+          <tr><td>human agent baseline</td><td class="num mono dim">${inr2(COSTS.human_baseline_inr)}</td></tr>
+          <tr><td>saving vs human</td><td class="num mono" style="color:var(--good)">${COSTS.savings_vs_human.saving_pct}%</td></tr>
+          <tr><td>spent on failed calls</td><td class="num mono" style="color:var(--critical)">${inr(COSTS.wasted_on_failures_inr)}</td></tr>
+        </tbody>
+      </table>
+      <p class="h" style="margin-top:12px">${esc(COSTS.note)}</p>
+    </div>
+  </div>
+
+  <h2>Provenance</h2>
+  <div class="card">
+    <table><tbody>
+      <tr><td class="dim" style="width:150px">ingest</td><td class="mono">${esc(m.ingest)}</td></tr>
+      <tr><td class="dim">labeling</td><td class="mono">${esc(m.labels)}</td></tr>
+      <tr><td class="dim">labeler</td><td class="mono">${esc(s.labeler)}${s.degraded ? ' <span style="color:var(--warning)">(DEGRADED)</span>' : ''}</td></tr>
+      <tr><td class="dim">suite pass rate</td><td class="mono">${pct(m.suite_pass_rate)} over ${m.graded} graded calls (${m.graded_failed} failed)</td></tr>
+      <tr><td class="dim">long tail</td><td class="mono">${s.tail_clusters} clusters / ${s.tail_volume} calls below the size floor — excluded from ranking, not dropped</td></tr>
+    </tbody></table>
+    ${(s.notes || []).map(n => `<p class="h" style="margin-top:11px">note: ${esc(n)}</p>`).join('')}
+  </div>`;
+
+  paintMatrix(); paintCost();
+}
+
+function paintMatrix() {
+  const el = $('#matrix');
+  const rows = [...REPORT.rows].sort((a, b) =>
+    (b.status !== 'covered') - (a.status !== 'covered') || b.priority - a.priority || b.volume - a.volume);
+  el.innerHTML = rows.map(r => `
+    <button class="cell ${r.status}" data-key="${esc(r.key)}">
+      <div class="name">${esc(titleize(r.key))}</div>
+      <div class="row"><b>${r.volume}</b> calls
+        <span style="color:${r.fail_rate > .4 ? 'var(--critical)' : 'var(--text-2)'}">${pct(r.fail_rate)} fail</span>
+      </div>
+      <div style="margin-top:8px">${chip(r.status, r.is_critical)}</div>
+      ${(r.compliance_detail||[]).length ? `<div class="flag">▲ ${breakable(esc(r.compliance_detail[0].flag))} ${pct(r.compliance_detail[0].rate)}</div>` : ''}
+    </button>`).join('');
+
+  el.querySelectorAll('.cell').forEach(c => {
+    const r = REPORT.rows.find(x => x.key === c.dataset.key);
+    bindTip(c, `${esc(titleize(r.key))}<br>${r.volume} calls · ${pct(r.fail_rate)} failing<br>` +
+      `wasted ${inr(r.failed_cost_inr)}<br>` +
+      (r.matched_scenarios.length ? `covered by ${r.matched_scenarios.join(', ')}` : 'no scenario covers this') +
+      (r.missing_conditions.length ? `<br>untested conditions: ${r.missing_conditions.join(', ')}` : '') +
+      ((r.compliance_detail||[]).length ? `<br>▲ ${r.compliance_detail.map(f => `${f.flag} ${f.count}/${r.volume}`).join(', ')}` : ''));
+    c.onclick = () => openCluster(c.dataset.key);
+  });
+}
+
+function renderDiff() {
+  const o = DIFF.overall, regs = DIFF.regressions;
+  const dir = o.aggregate_delta <= 0 ? 'improved' : 'worsened';
+  return `
+  <h2>Version attribution — ${esc(DIFF.baseline)} → ${esc(DIFF.candidate)}</h2>
+  <p class="sub">Per-cluster comparison between two agent versions. Each carries a one-sided
+     Fisher exact test; comparisons below the sample floor return
+     <span class="mono">insufficient_data</span> rather than a verdict.</p>
+  <div class="callout">
+    Aggregate failure rate <span class="big">${pct(o.baseline.rate)} → ${pct(o.candidate.rate)}</span>
+    (${(100*o.aggregate_delta).toFixed(1)}pp — <b>${dir}</b>).
+    ${o.aggregate_delta > 0.01
+      ? `The aggregate does not identify which situation moved: the same delta could be many
+         clusters drifting slightly or one moving sharply.`
+      : `The aggregate did not worsen.`}
+    ${regs.length
+      ? `Attributable to <b>${regs.length} cluster${regs.length>1?'s':''}</b>:
+         ${regs.map(d => `<b>${esc(titleize(d.key))} ${pct(d.baseline.rate)} → ${pct(d.candidate.rate)}</b>
+           (${(100*d.delta).toFixed(0)}pp, p=${d.p_value})`).join('; ')}.
+         The remaining ${DIFF.diffs.length - regs.length} did not move significantly.`
+      : `No cluster regressed significantly. Check <code>agenttrace agreement</code> for
+         whether the labeler can distinguish the two versions.`}
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>situation</th><th>verdict</th>
+        <th class="num">${esc(DIFF.baseline)}</th><th class="num">${esc(DIFF.candidate)}</th>
+        <th class="num">Δ</th><th class="num">p</th></tr></thead>
+      <tbody>${DIFF.diffs.map(d => {
+        const colour = d.verdict === 'regression' ? 'var(--critical)'
+          : d.verdict === 'improvement' ? 'var(--good)'
+          : d.verdict === 'insufficient_data' ? 'var(--text-3)' : 'var(--text-2)';
+        const glyph = d.verdict === 'regression' ? '✕ ' : d.verdict === 'improvement' ? '✓ ' : '';
+        return `<tr>
+          <td>${esc(titleize(d.key))}</td>
+          <td class="mono" style="color:${colour};font-weight:600;font-size:11px">${glyph}${esc(d.verdict)}</td>
+          <td class="num">${d.baseline.n ? `${d.baseline.failures}/${d.baseline.n} <span class="dim">(${pct(d.baseline.rate)})</span>` : '<span class="dim">—</span>'}</td>
+          <td class="num">${d.candidate.n ? `${d.candidate.failures}/${d.candidate.n} <span class="dim">(${pct(d.candidate.rate)})</span>` : '<span class="dim">—</span>'}</td>
+          <td class="num" style="color:${d.delta > 0.05 ? 'var(--critical)' : d.delta < -0.05 ? 'var(--good)' : 'var(--text-2)'}">${d.baseline.n && d.candidate.n ? (100*d.delta).toFixed(0)+'pp' : '—'}</td>
+          <td class="num dim">${d.verdict === 'insufficient_data' || d.verdict === 'new_cluster' || d.verdict === 'disappeared' ? '—' : d.p_value}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+function paintCost() {
+  /* Four categories in fixed slot order; the LLM's three sub-lines are summed. */
+  const b = COSTS.component.breakdown, n = COSTS.n_conversations;
+  const cats = [
+    {name: 'STT',       v: b.stt,        c: 'var(--series-1)'},
+    {name: 'LLM',       v: (b.llm_input||0) + (b.llm_cached||0) + (b.llm_output||0), c: 'var(--series-2)'},
+    {name: 'TTS',       v: b.tts,        c: 'var(--series-3)'},
+    {name: 'Telephony', v: b.telephony,  c: 'var(--series-4)'},
+  ];
+  const total = cats.reduce((a, x) => a + x.v, 0) || 1;
+
+  $('#stack').innerHTML = cats.map(x =>
+    `<i data-n="${esc(x.name)}" style="width:${100*x.v/total}%;background:${x.c}"></i>`).join('');
+  $('#stack').querySelectorAll('i').forEach((seg, i) => {
+    const x = cats[i];
+    bindTip(seg, `${esc(x.name)}<br>${inr2(x.v/n)} per call<br>${pct(x.v/total)} of cost`);
+  });
+  /* Direct labels: two light-mode slots fall below 3:1 contrast. */
+  $('#stack-legend').innerHTML = cats.map(x =>
+    `<span><i style="background:${x.c}"></i>${esc(x.name)} <b>${inr2(x.v/n)}</b>
+       <span class="dim">${pct(x.v/total)}</span></span>`).join('');
+  $('#cost-rows').innerHTML = cats.map(x =>
+    `<tr><td>${esc(x.name)}</td><td class="num">${inr2(x.v/n)}</td><td class="num dim">${pct(x.v/total)}</td></tr>`).join('')
+    + `<tr><td><b>total</b></td><td class="num"><b>${inr2(total/n)}</b></td><td class="num dim">100%</td></tr>`;
+}
+
+/* ---- drawer ---- */
+const scrim = $('#scrim'), drawer = $('#drawer');
+function closeDrawer() { scrim.classList.remove('on'); drawer.classList.remove('on'); }
+scrim.onclick = closeDrawer;
+addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+async function openCluster(key) {
+  scrim.classList.add('on'); drawer.classList.add('on');
+  drawer.innerHTML = `<div class="loading">loading ${esc(key)}…</div>`;
+  const d = await fetch(`/api/cluster/${encodeURIComponent(key)}`).then(r => r.json());
+
+  drawer.innerHTML = `
+    <button class="ghost xr" onclick="closeDrawer()">close</button>
+    <h3>${esc(titleize(d.key))}</h3>
+    <div style="margin:9px 0 15px;display:flex;gap:8px;flex-wrap:wrap">
+      ${chip(d.status, d.is_critical)}
+      <span class="chip" style="color:var(--text-2);border-color:var(--border-strong)">${d.volume} calls</span>
+      <span class="chip" style="color:var(--critical);border-color:var(--border-strong)">${pct(d.fail_rate)} failing</span>
+      <span class="chip" style="color:var(--text-2);border-color:var(--border-strong)">${inr(d.failed_cost_inr)} wasted</span>
+    </div>
+
+    <div class="card" style="margin-bottom:15px">
+      <table><tbody>
+        <tr><td class="dim" style="width:145px">coverage</td><td>${d.matched_scenarios.length
+          ? `matched <span class="mono">${d.matched_scenarios.join(', ')}</span><br><span class="dim" style="font-size:11.5px">${esc(d.match_reason)}</span>`
+          : '<span style="color:var(--critical)">no declared scenario covers this situation</span>'}</td></tr>
+        ${d.missing_conditions.length ? `<tr><td class="dim">untested conditions</td><td class="mono" style="color:var(--serious)">${d.missing_conditions.map(esc).join(', ')}</td></tr>` : ''}
+        ${(d.compliance_detail||[]).length ? `<tr><td class="dim">compliance</td><td class="mono" style="color:var(--critical);font-size:11.5px">${
+          d.compliance_detail.map(f => `${esc(f.flag)} — <b>${f.count}</b> of ${d.volume} calls (${pct(f.rate)})`).join('<br>')}</td></tr>` : ''}
+        ${(d.suppressed_flags||[]).length ? `<tr><td class="dim">below threshold</td><td class="mono dim" style="font-size:11px">${
+          d.suppressed_flags.map(f => `${esc(f.flag)} ${f.count}/${d.volume} (${pct(f.rate)})`).join(', ')
+          }<br>seen, but under the ${'15%'} rate floor — shown so nothing is hidden, not counted as a finding</td></tr>` : ''}
+        <tr><td class="dim">conditions seen</td><td class="mono" style="font-size:11px">${d.top_conditions.map(([k, v]) => `${esc(k)} ×${v}`).join(', ') || '—'}</td></tr>
+        ${d.failure_modes.length ? `<tr><td class="dim">failure modes</td><td style="font-size:12px">${d.failure_modes.map(m => '• ' + esc(m)).join('<br>')}</td></tr>` : ''}
+        <tr><td class="dim">merged labels</td><td class="mono" style="font-size:11px">${d.member_slugs.map(esc).join(', ')}</td></tr>
+        <tr><td class="dim">by version</td><td class="mono" style="font-size:11px">${Object.entries(d.by_version).map(([v, x]) => `${esc(v)}: ${x.failed}/${x.n} (${pct(x.fail_rate)})`).join(' · ')}</td></tr>
+      </tbody></table>
+    </div>
+
+    ${d.status !== 'covered' ? `
+      <button class="primary" id="closegap">generate the missing scenario →</button>
+      <div id="gen"></div>` : ''}
+
+    <h2 style="margin-top:26px">Example calls</h2>
+    <p class="sub">Failing calls first. Transcripts are PII-redacted.</p>
+    ${d.examples.map(x => `
+      <div class="ex">
+        <div class="hd">
+          <b style="color:var(--text-1)">${esc(x.id)}</b>
+          <span>${esc(x.version)}</span><span>${esc(x.language)}</span>
+          <span>${Math.round(x.duration_s)}s</span><span>${inr2(x.cost_inr)}</span>
+          <span class="dim">platform said: ${esc(x.source_disposition || x.outcome || '—')}</span>
+          ${x.grade ? (x.grade.passed
+            ? `<span class="chip covered"><span class="g">✓</span>suite pass</span>`
+            : `<span class="chip ${x.grade.critical ? 'compliance' : 'uncovered'}"><span class="g">${x.grade.critical ? '▲' : '✕'}</span>${x.grade.critical ? 'critical' : 'failed'}</span>`) : ''}
+        </div>
+        ${x.transcript.split('\n').map(l => {
+          const who = l.startsWith('AGENT') ? 'agent' : 'caller';
+          const i = l.indexOf(':');
+          return `<div class="turn ${who}"><span class="who">${esc(l.slice(0, i))}</span>${esc(l.slice(i + 1))}</div>`;
+        }).join('')}
+        ${x.grade && x.grade.failures.length ? x.grade.failures.map(f =>
+          `<div class="fail">${esc(f.type)}${f.severity === 'critical' ? ' [CRITICAL]' : ''}: ${esc(f.detail)}</div>`).join('') : ''}
+      </div>`).join('')}`;
+
+  const btn = $('#closegap', drawer);
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true; btn.textContent = 'generating…';
+    const g = await fetch(`/api/close-gap/${encodeURIComponent(key)}`, {method: 'POST'}).then(r => r.json());
+    const sc = g.scenario;
+    $('#gen', drawer).innerHTML = `
+      <pre class="yaml">${esc(toYaml(sc))}</pre>
+      <p class="h" style="font-size:11.5px;margin-top:9px">${esc(g.note)}</p>`;
+    btn.textContent = 'scenario generated ↓';
+  };
+}
+window.closeDrawer = closeDrawer;
+
+/* Minimal YAML writer, so the drawer shows the file a reviewer would receive. */
+function toYaml(o, ind = 0) {
+  const p = ' '.repeat(ind);
+  if (Array.isArray(o)) {
+    if (!o.length) return ' []';
+    return '\n' + o.map(v => (v && typeof v === 'object')
+      ? p + '  - ' + toYaml(v, ind + 4).replace(/^\n\s*/, '').replace(/\n\s{4}/g, '\n' + p + '    ')
+      : p + '  - ' + v).join('\n');
+  }
+  if (o && typeof o === 'object') {
+    return '\n' + Object.entries(o).filter(([, v]) => v !== null && v !== undefined)
+      .map(([k, v]) => p + '  ' + k + ':' +
+        ((v && typeof v === 'object') ? toYaml(v, ind + 2)
+          : ' ' + (typeof v === 'string' && (v.includes(':') || v.includes('\n')) ? JSON.stringify(v) : v)))
+      .join('\n');
+  }
+  return ' ' + o;
+}
+
+/* theme toggle */
+$('#theme').onclick = () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'dark' ? 'light' : cur === 'light' ? null : 'dark';
+  if (next) document.documentElement.setAttribute('data-theme', next);
+  else document.documentElement.removeAttribute('data-theme');
+};
+
+boot();
+</script>
+</body>
+</html>

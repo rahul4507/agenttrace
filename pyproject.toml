@@ -1,0 +1,43 @@
+[project]
+name = "agenttrace"
+version = "0.1.0"
+description = "Coverage and regression analysis for voice agents"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+agenttrace = "agenttrace.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Deliberately quiet by default: the suite runs in ~1s, so a green dot line is the useful
+# signal and anything louder trains people to stop reading it.
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "UP", "B", "SIM", "C4", "RET", "ARG"]
+ignore = [
+    "E501",    # line length is handled by the formatter, and comments here are prose
+    "B008",    # FastAPI's Depends() in defaults is the framework's own idiom
+    "ARG001",  # graders share one signature; not every check uses every argument
+    "ARG002",
+    "RET504",  # a named return value is often clearer than inlining the expression
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests build fixtures inline and shadow names deliberately.
+"tests/*" = ["ARG", "SIM"]

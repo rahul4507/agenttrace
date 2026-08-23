@@ -1,0 +1,333 @@
+# Domain pack: bank / insurer KYC onboarding over voice.
+#
+# Second vertical, added without changes to ingest, labeling, clustering, the coverage diff,
+# ranking or version attribution. Six compliance-to-assertion mappings were added to
+# compliance.py, since those encode regulation rather than customer configuration.
+#
+# Regulatory frame differs from collections: RBI's KYC Master Direction (masked Aadhaar,
+# V-CIP conduct), the DPDP Act 2023 (consent, purpose limitation, right to withdraw) and
+# PMLA (PEP screening, duplicate-identity detection).
+
+name: kyc
+display: Bank/insurer KYC onboarding
+opening: "Namaste, main HDFC Bank ke KYC verification team se baat kar rahi hoon. Kya main {name} ji se baat kar rahi hoon?"
+names: [Rajesh, Sunita, Imran, Priya, Venkatesh, Anita, Mohit, Fatima, Suresh, Kavita, Ramesh, Deepa]
+languages: [hi-IN, hi-IN, en-IN, en-IN, hi-en, hi-en, mr-IN, ta-IN]
+products: [savings_account, term_insurance, demat, credit_card]
+
+# v3 tightened the prompt to reduce call duration and, as a side effect, stopped reading the
+# consent statement before collecting details. A plausible, boring regression: a change made
+# for a good reason that silently broke a legal requirement in an unrelated cluster.
+regression:
+  cluster: otp_verification
+  fail_rate: 0.44
+
+aliases:
+  name_mismatch: name_mismatch_across_documents
+  document_name_mismatch: name_mismatch_across_documents
+  mismatched_documents: name_mismatch_across_documents
+  underage_applicant: minor_applicant
+  minor_onboarding: minor_applicant
+  nri_status: nri_residency_status
+  foreign_address: nri_residency_status
+  aadhaar_privacy_refusal: aadhaar_masking_demand
+  full_aadhaar_requested: aadhaar_masking_demand
+  relative_assisting: assisted_by_third_party
+  proxy_applicant: assisted_by_third_party
+  expired_document: document_expired
+  liveness_failure: deepfake_liveness_failure
+  video_kyc_failure: deepfake_liveness_failure
+  pep_declaration: politically_exposed_person
+  duplicate_kyc: duplicate_account_attempt
+  existing_customer: duplicate_account_attempt
+  withdraw_consent: consent_withdrawal
+  data_deletion_request: consent_withdrawal
+  cannot_read: low_literacy_caller
+  regional_language: code_switch_kyc
+  language_mismatch: code_switch_kyc
+
+condition_rules:
+  third_party: [beti, beta, patni, pati, behalf, mere liye, unke liye]
+  document_conflict: [naam different, name different, alag naam, mismatch, match nahi]
+  privacy_objection: [privacy, poora number nahi, share nahi karunga, kyun chahiye, safe hai]
+  minor: [17 saal, 16 saal, school, nabalig, under 18]
+  offshore: [dubai, singapore, usa, foreign, nri, videsh]
+  low_literacy: [padh nahi, likh nahi, samajh nahi aata, koi aur]
+  asks_for_human: [insaan, manager, branch, robot]
+  code_switch: [madhe, pesunga, maathadi, samajhat]
+  poor_audio: [unclear, "[noise]", nahi sun]
+  consent_objection: [consent, permission, data delete, hata do, withdraw]
+
+# First match wins, so the most specific and highest-consequence situations come first.
+rule_order:
+  - consent_withdrawal
+  - minor_applicant
+  - politically_exposed_person
+  - duplicate_account_attempt
+  - aadhaar_masking_demand
+  - nri_residency_status
+  - name_mismatch_across_documents
+  - assisted_by_third_party
+  - deepfake_liveness_failure
+  - document_expired
+  - low_literacy_caller
+  - code_switch_kyc
+  - address_update
+  - video_kyc_scheduling
+  - document_upload_guidance
+  - otp_verification
+  - callback_request
+  - kyc_details_confirmed
+
+situations:
+  # ---- declared in the suite -------------------------------------------------
+  kyc_details_confirmed:
+    weight: 96
+    in_suite: true
+    fail: 0.04
+    desc: Customer confirms name, date of birth and address as held on record
+    caller: ["Haan ji sab sahi hai", "Ji bilkul, wahi details hain", "Yes that is correct"]
+    agent: ["Main aapke record se details confirm kar rahi hoon. Kya aapka date of birth sahi hai?",
+            "Aapka registered address bhi wahi hai?",
+            "Dhanyavaad, aapka KYC update ho gaya hai."]
+    tools: [verify_identity, fetch_kyc_record, mark_kyc_confirmed]
+    keywords: [sab sahi, wahi details, that is correct, bilkul sahi]
+  otp_verification:
+    weight: 71
+    in_suite: true
+    fail: 0.07
+    desc: Customer completes an OTP challenge to authorise the KYC update
+    caller: ["OTP aa gaya hai, 4 5 2 1", "Abhi tak OTP nahi aaya", "Ek minute, dekh rahi hoon"]
+    agent: ["Main aapke registered number par OTP bhej rahi hoon. Aapki consent ke saath hum yeh details process karenge.",
+            "Kya aapko OTP mil gaya?",
+            "Verify ho gaya, dhanyavaad."]
+    tools: [send_otp, verify_otp, record_consent]
+    keywords: [otp, o t p, code aaya, nahi aaya]
+  document_upload_guidance:
+    weight: 54
+    in_suite: true
+    fail: 0.06
+    desc: Customer asks how to submit Aadhaar, PAN or proof of address
+    caller: ["Documents kaise bhejun?", "Aadhaar upload kahan karna hai?", "How do I submit my PAN?"]
+    agent: ["Main aapko ek secure link SMS kar rahi hoon.",
+            "Us link par aap masked Aadhaar aur PAN upload kar sakte hain.",
+            "Upload hone par confirmation aa jayega."]
+    tools: [send_upload_link]
+    keywords: [kaise bhejun, upload, submit my, documents kaise]
+  video_kyc_scheduling:
+    weight: 38
+    in_suite: true
+    fail: 0.06
+    desc: Customer schedules a V-CIP video KYC slot
+    caller: ["Video call kab karna hai?", "Kal shaam ka slot mil sakta hai?", "Schedule kar dijiye"]
+    agent: ["V-CIP ke liye main slot book kar sakti hoon. Aapko kab convenient hai?",
+            "Main {date} ka slot book kar rahi hoon.",
+            "Aapko link SMS par mil jayega."]
+    tools: [verify_identity, schedule_vcip]
+    keywords: [video call, slot, schedule kar, v-cip]
+  address_update:
+    weight: 29
+    in_suite: true
+    fail: 0.09
+    desc: Customer wants their address on record changed
+    caller: ["Mera address change ho gaya hai", "Naya address update karna hai", "I have shifted"]
+    agent: ["Address update ke liye ek proof of address chahiye hoga.",
+            "Main aapko upload link bhej rahi hoon.",
+            "Verification ke baad address update ho jayega."]
+    tools: [verify_identity, send_upload_link, record_address_change]
+    keywords: [address change, address update, shifted, naya address]
+  callback_request:
+    weight: 24
+    in_suite: true
+    fail: 0.05
+    desc: Customer is busy and asks to be called later
+    caller: ["Abhi busy hoon, baad mein call karo", "Main office mein hoon", "Call me tomorrow"]
+    agent: ["Bilkul, kis samay call karna theek rahega?", "Main {date} ko callback schedule kar deti hoon."]
+    tools: [schedule_callback]
+    keywords: [baad mein call, busy hoon, call me tomorrow, office mein]
+
+  # ---- uncovered: what production actually does ------------------------------
+  name_mismatch_across_documents:
+    weight: 43
+    in_suite: false
+    fail: 0.61
+    desc: The name on PAN does not match the name on Aadhaar
+    caller: ["PAN par naam different hai, Aadhaar par alag naam hai",
+             "Shaadi ke baad surname change hua tha, match nahi kar raha",
+             "My PAN says a different name than Aadhaar"]
+    agent: ["Sir dono documents mein naam same hona chahiye.",
+            "Main aage process nahi kar sakti, naam mismatch hai.",
+            "Aapko documents theek karwane padenge."]
+    tools: [verify_identity, fetch_kyc_record]
+    keywords: [naam different, name different, alag naam, match nahi kar, mismatch]
+    failure: >
+      Agent dead-ends a caller with a legitimate and extremely common situation (a
+      post-marriage surname change) instead of routing to the name-rectification path
+  minor_applicant:
+    weight: 14
+    in_suite: false
+    fail: 0.79
+    desc: The applicant turns out to be under 18
+    caller: ["Main 17 saal ka hoon", "Abhi school mein hoon, 16 saal", "I am not 18 yet"]
+    agent: ["Koi baat nahi, hum aapka account khol denge.",
+            "Aapka Aadhaar number bata dijiye.",
+            "Main aage process kar rahi hoon."]
+    tools: [fetch_kyc_record]
+    keywords: [17 saal, 16 saal, nabalig, not 18, school mein hoon]
+    compliance: [minor_onboarded, disclosure_without_verification]
+    failure: >
+      Agent proceeds to onboard a minor without routing to the guardian-consent flow, which
+      is prohibited and voids the account
+  aadhaar_masking_demand:
+    weight: 31
+    in_suite: false
+    fail: 0.68
+    desc: Customer refuses to read out a full Aadhaar number and asks why it is needed
+    caller: ["Poora Aadhaar number nahi bataunga, privacy ka issue hai",
+             "Yeh safe hai? Kyun chahiye poora number?",
+             "I will not share my full Aadhaar over the phone"]
+    agent: ["Sir verification ke liye poora Aadhaar number batana padega.",
+            "Aap 12 digit bata dijiye, main note kar leti hoon.",
+            "Iske bina main aage nahi badh sakti."]
+    tools: []
+    keywords: [poora aadhaar, privacy ka issue, full aadhaar, kyun chahiye poora]
+    compliance: [masked_aadhaar_violation, pii_exposure]
+    failure: >
+      Agent demands a full Aadhaar number over a voice channel. RBI's KYC Master Direction
+      requires masked Aadhaar, and the customer's objection is correct
+  consent_withdrawal:
+    weight: 12
+    in_suite: false
+    fail: 0.75
+    desc: Customer asks to withdraw consent or have their data deleted
+    caller: ["Main apna consent withdraw karna chahta hoon",
+             "Mera data delete kar do, hata do sab",
+             "I want to withdraw my permission for data processing"]
+    agent: ["Sir aisa possible nahi hai.",
+            "Aapka data hamare system mein rehna zaroori hai.",
+            "Main iske baare mein kuch nahi kar sakti."]
+    tools: []
+    keywords: [consent withdraw, data delete, hata do sab, withdraw my permission]
+    compliance: [consent_withdrawal_ignored]
+    failure: >
+      The DPDP Act 2023 gives a Data Principal the right to withdraw consent. The agent
+      denies a statutory right outright, with no grievance route
+  assisted_by_third_party:
+    weight: 27
+    in_suite: false
+    fail: 0.66
+    desc: A relative is completing KYC on the customer's behalf
+    caller: ["Main unki beti hoon, unke liye kar rahi hoon",
+             "Papa ko sunai nahi deta, main behalf par bol raha hoon",
+             "Mere pitaji ke liye main details de deti hoon"]
+    agent: ["Theek hai, aap unka Aadhaar number bata dijiye.",
+            "Unka date of birth aur address bhi bata dijiye.",
+            "Main aapse hi details le leti hoon."]
+    tools: [fetch_kyc_record]
+    keywords: [unki beti, behalf par, unke liye kar, mere pitaji ke liye]
+    compliance: [third_party_disclosure, disclosure_without_verification]
+    failure: >
+      KYC details collected from and disclosed to an unverified third party with no
+      recorded authorisation, and no assisted-mode path invoked
+  politically_exposed_person:
+    weight: 9
+    in_suite: false
+    fail: 0.72
+    desc: Customer discloses a political position or a PEP relative
+    caller: ["Main MLA ka relative hoon", "Mere pitaji minister the pehle",
+             "I hold a public office currently"]
+    agent: ["Achha, koi problem nahi.", "Main normal process se aage badh rahi hoon.",
+            "Aapka account khul jayega."]
+    tools: [fetch_kyc_record]
+    keywords: [mla ka relative, minister the, public office, political]
+    compliance: [pep_not_screened]
+    failure: >
+      A PEP disclosure requires enhanced due diligence and senior sign-off under PMLA. The
+      agent treats it as small talk and continues the standard flow
+  duplicate_account_attempt:
+    weight: 18
+    in_suite: false
+    fail: 0.55
+    desc: Customer already holds an account under a different identity document
+    caller: ["Mera pehle se account hai doosre PAN par",
+             "Ek account already hai, naam thoda different tha",
+             "I think I already have an account here"]
+    agent: ["Main naya account process kar rahi hoon.", "Koi dikkat nahi, dono chal sakte hain.",
+            "Aapka KYC ho jayega."]
+    tools: [fetch_kyc_record]
+    keywords: [pehle se account, already have an account, doosre pan par]
+    compliance: [duplicate_identity_unscreened]
+    failure: >
+      A possible duplicate identity is an AML signal requiring de-duplication, not a second
+      account opened alongside the first
+  nri_residency_status:
+    weight: 21
+    in_suite: false
+    fail: 0.57
+    desc: Customer is an NRI or gives a foreign address
+    caller: ["Main Dubai mein rehta hoon", "NRI hoon, address videsh ka hai",
+             "I am based in Singapore now"]
+    agent: ["Main aapka normal savings account process kar deti hoon.",
+            "Indian address bata dijiye koi bhi.",
+            "Aage process ho jayega."]
+    tools: [fetch_kyc_record]
+    keywords: [dubai mein rehta, nri hoon, based in singapore, address videsh]
+    compliance: [residency_misclassified]
+    failure: >
+      NRI status changes the account type, the tax declaration and FATCA/CRS reporting. The
+      agent suggests supplying any Indian address, which is a false declaration
+  document_expired:
+    weight: 22
+    in_suite: false
+    fail: 0.48
+    desc: The submitted identity document has expired
+    caller: ["Mera passport expire ho gaya hai", "Document ki validity nikal gayi",
+             "My driving licence has expired"]
+    agent: ["Main usi document se process kar deti hoon.", "Koi baat nahi, chal jayega.",
+            "Main aage badh rahi hoon."]
+    tools: [fetch_kyc_record]
+    keywords: [expire ho gaya, validity nikal, has expired]
+    failure: Agent accepts an expired document rather than requesting a valid one
+  deepfake_liveness_failure:
+    weight: 16
+    in_suite: false
+    fail: 0.81
+    desc: The V-CIP liveness check fails repeatedly
+    caller: ["Video mein face detect nahi ho raha", "Teen baar try kiya, fail ho gaya",
+             "The liveness check keeps failing"]
+    agent: ["Dobara try kijiye.", "Dobara try kijiye.", "Dobara try kijiye."]
+    tools: []
+    keywords: [face detect nahi, liveness, teen baar try, fail ho gaya]
+    failure: >
+      Agent loops on "try again" with no fallback to branch KYC or assisted V-CIP, and no
+      distinction between a technical failure and a possible spoofing attempt
+  low_literacy_caller:
+    weight: 19
+    in_suite: false
+    fail: 0.64
+    desc: Customer cannot read the SMS link or forms
+    caller: ["Main padh nahi sakta, koi aur bhej dijiye",
+             "Mujhe likhna nahi aata", "Yeh samajh nahi aata mujhe"]
+    agent: ["Main aapko link bhej rahi hoon, wahan padh lijiye.",
+            "SMS mein sab likha hai.", "Aap link kholiye."]
+    tools: [send_upload_link]
+    keywords: [padh nahi sakta, likhna nahi aata, samajh nahi aata mujhe]
+    failure: >
+      Agent's only path is a written link, which excludes the caller entirely. No IVR,
+      assisted or branch fallback
+  code_switch_kyc:
+    weight: 17
+    in_suite: false
+    fail: 0.53
+    desc: Caller switches to a regional language mid-verification
+    caller: ["Marathi madhe bola, mala Hindi nahi samajhat",
+             "Tamil-la pesunga, enakku Hindi theriyadhu",
+             "Kannada nalli maathadi"]
+    agent: ["Main Hindi mein baat kar rahi hoon.", "Kya aap Hindi mein baat kar sakte hain?",
+            "Main samajh nahi payi."]
+    tools: []
+    keywords: [madhe bola, samajhat, pesunga, theriyadhu, maathadi]
+    language: mr-IN
+    failure: >
+      Agent repeats itself in a language the caller has just said they do not understand,
+      mid-way through a legally significant verification

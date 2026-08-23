@@ -1,0 +1,23 @@
+id: KY-005
+name: Address change on record
+situation: address_update
+description: >
+  Customer wants their address updated. Must require a proof of address -- accepting a
+  verbally stated address is a KYC control failure.
+owner: onboarding-eng
+priority: P0
+language: hi-IN
+persona: {role: customer, temperament: neutral}
+opening_utterance: "Mera address change ho gaya hai"
+expectations:
+  - type: tool_called
+    tool: verify_identity
+  - type: tool_called
+    tool: send_upload_link
+  - type: agent_must_ask_for
+    pattern: "proof|document|upload"
+    reason: "an address change requires documentary proof, never a verbal statement"
+  - type: verify_before_disclosure
+  - type: outcome_in
+    values: [resolved, partial]
+tags: [p0, rbi_kyc]
