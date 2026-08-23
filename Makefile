@@ -27,7 +27,7 @@ help:
 	@echo ""
 	@echo "Docker (no local python needed):"
 	@echo "  make docker      build the image"
-	@echo "  make docker-up   dashboard on http://localhost:$(PORT)"
+	@echo "  make docker-up   dashboard on http://localhost:$(PORT)  (override: make docker-up PORT=9100)"
 	@echo "  make docker-test run the test suite in the container"
 
 venv:
@@ -83,7 +83,7 @@ docker:
 	docker build -t $(IMAGE) .
 
 docker-up: docker
-	docker run --rm -p $(PORT):8994 $(IMAGE)
+	docker run --rm -p $(PORT):8000 $(IMAGE)
 
 docker-test: docker
 	docker run --rm $(IMAGE) python -m pytest

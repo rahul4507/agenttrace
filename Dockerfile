@@ -16,8 +16,11 @@ RUN useradd --create-home --uid 10001 app \
     && chown -R app:app /app
 USER app
 
-EXPOSE 8994
+# The container always listens on 8000. A container port lives in its own namespace and so
+# can never collide with anything on the host; only the published host port can. Change the
+# host side (compose PORT, or -p) and leave this alone.
+ENV PORT=8000
+EXPOSE 8000
 
-# 0.0.0.0 so the port is reachable from the host; publish it with -p 8994:8994.
-CMD ["python", "-m", "uvicorn", "agenttrace.api:app", \
-     "--host", "0.0.0.0", "--port", "8994"]
+# Shell form so ${PORT} is expanded; exec so uvicorn is PID 1 and receives signals.
+CMD ["sh", "-c", "exec python -m uvicorn agenttrace.api:app --host 0.0.0.0 --port ${PORT}"]

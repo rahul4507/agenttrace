@@ -1,9 +1,13 @@
 # docker compose up  ->  dashboard on http://localhost:8994
+#
+# If 8994 is taken, set the host port and nothing else:
+#     PORT=9100 docker compose up
 services:
   dashboard:
     build: .
     ports:
-      - "8994:8994"
+      # host:container -- only the host side is variable
+      - "${PORT:-8994}:8000"
     environment:
       # The dashboard runs on the heuristic labeler, which needs no key. The recorded
       # Sarvam responses in fixtures/ cover the --llm path at no cost.
